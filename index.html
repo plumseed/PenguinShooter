@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Penguin Shooter</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+        }
+    </style>
+</head>
+
+<body>
+    <script>
+        // 你的 JavaScript 代码放这里（粘贴刚才的代码）
+
+
+        // Penguin Shooter 基础框架
+
+        // 1. 初始化 Canvas
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        document.body.appendChild(canvas);
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+
+        // 2. 游戏对象
+        const player = {
+            x: canvas.width - 150,
+            y: canvas.height / 2 - 50,
+            width: 50,
+            height: 50,
+            health: 100
+        };
+
+        const enemies = [];
+        const bullets = [];
+
+        // 3. 监听鼠标或触摸事件进行射击
+        canvas.addEventListener('click', (event) => {
+            bullets.push({
+                x: player.x,
+                y: event.clientY,
+                speed: 10
+            });
+        });
+
+        // 4. 更新游戏逻辑
+        function update() {
+            // 更新子弹位置
+            bullets.forEach((bullet, index) => {
+                bullet.x -= bullet.speed;
+                if (bullet.x < 0) bullets.splice(index, 1);
+            });
+
+            // TODO: 添加敌人生成和碰撞检测逻辑
+        }
+
+        // 5. 绘制游戏画面
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // 绘制玩家
+            ctx.fillStyle = 'blue';
+            ctx.fillRect(player.x, player.y, player.width, player.height);
+
+            // 绘制子弹
+            ctx.fillStyle = 'red';
+            bullets.forEach(bullet => {
+                ctx.fillRect(bullet.x, bullet.y, 10, 5);
+            });
+
+            // TODO: 添加敌人绘制逻辑
+        }
+
+        // 6. 游戏主循环
+        function gameLoop() {
+            update();
+            draw();
+            requestAnimationFrame(gameLoop);
+        }
+
+        gameLoop();
+    </script>
+</body>
+
+</html>
