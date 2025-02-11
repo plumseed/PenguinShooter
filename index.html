@@ -17,7 +17,6 @@
     <script>
         // 你的 JavaScript 代码放这里（粘贴刚才的代码）
 
-
         // Penguin Shooter 基础框架
 
         // 1. 初始化 Canvas
@@ -66,17 +65,36 @@
         // 5. 更新游戏逻辑
         function update() {
             // 更新子弹位置
-            bullets.forEach((bullet, index) => {
+            bullets.forEach((bullet, bulletIndex) => {
                 bullet.x -= bullet.speed;
-                if (bullet.x < 0) bullets.splice(index, 1);
+                if (bullet.x < 0) bullets.splice(bulletIndex, 1);
             });
 
             // 更新敌人位置
-            enemies.forEach(enemy => {
+            enemies.forEach((enemy, enemyIndex) => {
                 enemy.x += enemy.speed;
             });
 
-            // TODO: 添加碰撞检测逻辑
+            // 碰撞检测：检查子弹是否击中敌企鹅
+            bullets.forEach((bullet, bulletIndex) => {
+                enemies.forEach((enemy, enemyIndex) => {
+                    if (
+                        bullet.x < enemy.x + enemy.width &&
+                        bullet.x + 10 > enemy.x &&
+                        bullet.y < enemy.y + enemy.height &&
+                        bullet.y + 5 > enemy.y
+                    ) {
+                        // 子弹击中敌企鹅，减少敌企鹅血量
+                        enemy.health -= 1;
+                        bullets.splice(bulletIndex, 1);
+
+                        // 如果敌企鹅血量为0，则移除
+                        if (enemy.health <= 0) {
+                            enemies.splice(enemyIndex, 1);
+                        }
+                    }
+                });
+            });
         }
 
         // 6. 绘制游戏画面
