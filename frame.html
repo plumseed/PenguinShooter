@@ -48,22 +48,7 @@
             });
         });
 
-        // 4. 生成敌企鹅
-        function spawnEnemy() {
-            const enemy = {
-                x: 0,
-                y: Math.random() * (canvas.height - 50),
-                width: 50,
-                height: 50,
-                speed: 2,
-                health: 3
-            };
-            enemies.push(enemy);
-        }
-
-        setInterval(spawnEnemy, 2000); // 每2秒生成一个敌企鹅
-
-        // 5. 更新游戏逻辑
+        // 4. 更新游戏逻辑
         function update() {
             // 更新子弹位置
             bullets.forEach((bullet, index) => {
@@ -71,15 +56,10 @@
                 if (bullet.x < 0) bullets.splice(index, 1);
             });
 
-            // 更新敌人位置
-            enemies.forEach(enemy => {
-                enemy.x += enemy.speed;
-            });
-
-            // TODO: 添加碰撞检测逻辑
+            // TODO: 添加敌人生成和碰撞检测逻辑
         }
 
-        // 6. 绘制游戏画面
+        // 5. 绘制游戏画面
         function draw() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
@@ -93,14 +73,10 @@
                 ctx.fillRect(bullet.x, bullet.y, 10, 5);
             });
 
-            // 绘制敌企鹅
-            ctx.fillStyle = 'black';
-            enemies.forEach(enemy => {
-                ctx.fillRect(enemy.x, enemy.y, enemy.width, enemy.height);
-            });
+            // TODO: 添加敌人绘制逻辑
         }
 
-        // 7. 游戏主循环
+        // 6. 游戏主循环
         function gameLoop() {
             update();
             draw();
