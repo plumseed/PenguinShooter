@@ -55,7 +55,8 @@
                 width: 50,
                 height: 50,
                 speed: 2,
-                health: 3
+                health: 3,
+                damage: 10
             };
             enemies.push(enemy);
         }
@@ -73,6 +74,12 @@
             // 更新敌人位置
             enemies.forEach((enemy, enemyIndex) => {
                 enemy.x += enemy.speed;
+
+                // 敌企鹅到达玩家堡垒，开始攻击
+                if (enemy.x + enemy.width >= player.x) {
+                    player.health -= enemy.damage;
+                    enemies.splice(enemyIndex, 1); // 攻击后消失
+                }
             });
 
             // 碰撞检测：检查子弹是否击中敌企鹅
@@ -95,6 +102,12 @@
                     }
                 });
             });
+
+            // 检查玩家血量
+            if (player.health <= 0) {
+                alert("游戏结束！");
+                location.reload(); // 重新加载游戏
+            }
         }
 
         // 6. 绘制游戏画面
@@ -104,6 +117,10 @@
             // 绘制玩家
             ctx.fillStyle = 'blue';
             ctx.fillRect(player.x, player.y, player.width, player.height);
+
+            // 绘制玩家血量
+            ctx.fillStyle = 'green';
+            ctx.fillRect(player.x, player.y - 20, player.health / 2, 5);
 
             // 绘制子弹
             ctx.fillStyle = 'red';
