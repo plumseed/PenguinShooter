@@ -65,9 +65,10 @@
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
 
-        // 加载企鹅图片
+        // 加载企鹅图片（暂时保留注释，后续替换）
         const penguinImg = new Image();
         penguinImg.src = 'https://img2.doubanio.com/view/photo/l/public/p1095208351.webp';
+        let imageLoaded = false;
 
         // 游戏状态
         let game = {
@@ -201,6 +202,7 @@
         function closeShopModal() {
             game.isPaused = false;
             document.getElementById('shopModal').style.display = 'none';
+            designLevel(game.level); // 继续下一关
         }
 
         // 游戏循环
@@ -214,7 +216,7 @@
             ctx.fillRect(600, 0, 200, canvas.height);
 
             // 绘制玩家企鹅
-            if (penguinImg.complete) {
+            if (imageLoaded && penguinImg.complete) {
                 ctx.drawImage(penguinImg, player.x, player.y, player.width, player.height);
                 // 注释：后续替换为 'playerPenguin.png'
             } else {
@@ -274,7 +276,7 @@
                 }
 
                 if (!enemy.isStealth) {
-                    if (penguinImg.complete) {
+                    if (imageLoaded && penguinImg.complete) {
                         ctx.drawImage(penguinImg, enemy.x, enemy.y, enemy.width, enemy.height);
                         // 注释：后续根据enemy.type替换，如 'normalPenguin.png', 'fastPenguin.png' 等
                     } else {
@@ -322,7 +324,7 @@
 
             // 更新和绘制辅助企鹅
             helpers.forEach((helper, hIndex) => {
-                if (penguinImg.complete) {
+                if (imageLoaded && penguinImg.complete) {
                     ctx.drawImage(penguinImg, helper.x, helper.y, 30, 30);
                     // 注释：后续根据helper.type替换，如 'shootPenguin.png', 'healPenguin.png'
                 } else {
@@ -565,18 +567,19 @@
             designLevel(1);
         }
 
-        // 图片加载后启动游戏
+        // 图片加载状态
         penguinImg.onload = () => {
-            designLevel(1);
-            gameLoop();
+            imageLoaded = true;
+            console.log('图片加载成功');
+        };
+        penguinImg.onerror = () => {
+            imageLoaded = false;
+            console.log('图片加载失败，使用矩形绘制');
         };
 
-        // 图片加载失败时启动游戏（备用方案）
-        penguinImg.onerror = () => {
-            console.log('图片加载失败，使用矩形绘制');
-            designLevel(1);
-            gameLoop();
-        };
+        // 启动游戏
+        designLevel(1);
+        gameLoop();
     </script>
 </body>
 </html>
