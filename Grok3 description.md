@@ -4958,3 +4958,2282 @@ const shootSound = new Audio('https://your-url/shoot.mp3');
 音效添加：提供音效和背景音乐URL，我帮你集成。
 背景优化：如果需要雪地背景图，可提供URL或描述需求，我帮你添加。
 请确认游戏是否正常运行，或提供后续资源URL/需求，我再进一步调整！
+
+
+
+玩家升级系统，每关关卡结束后可以通过获得的金币在商店购买，比如不同枪支，枪支还可以通过金币升级弹匣容量，子弹威力等，然后商店还可以购买辅助企鹅，包括回血企鹅，辅助射击企鹅，还比如提高玩家血条值，当然你也可以再添加一些其他可能的升级。
+你先按一定算法设计不同升级需要的金币数量，并和关卡可获得的金币数量对应，你先按一定算法设计不同升级需要的金币数量，并和关卡可获得的金币数量对应，先确保游戏可以正常运行，后续我们再进一步修改这些商店升级系统
+
+我会为游戏添加一个玩家升级系统，基于现有商店功能扩展，让玩家在每关结束后用金币购买和升级物品。以下是设计思路和修改后的代码，确保游戏可正常运行，后续可进一步调整。
+升级系统设计思路
+商店升级项
+不同枪支：
+手枪 (Pistol)：基础枪，初始拥有。
+步枪 (Rifle)：更高伤害。
+霰弹枪 (Shotgun)：发射多颗子弹（后续可实现散射效果）。
+枪支升级：
+弹匣容量：增加单次射击前的子弹数（当前为无限，改为有限制）。
+子弹威力：提高单发伤害。
+辅助企鹅：
+回血企鹅：周期性恢复玩家血量。
+射击企鹅：已有，自动射击敌人。
+玩家血条：
+提高最大血量：从100提升上限。
+额外升级（新增）：
+射击速度：减少射击间隔（增加连发频率）。
+护盾：临时减免伤害。
+金币算法与关卡对应
+关卡金币收入：
+每关基础奖励：level * 5（第1关5，第20关100）。
+击杀奖励：普通敌人10金币，辅助企鹅击杀5金币。
+估算总收入：20关基础奖励1050金币，假设每关平均击杀10个敌人（100金币），总计约3050金币。
+升级金币需求：
+按游戏进程设计递增成本，确保前期可购买基础项，后期需积累。
+初级：50-100金币，中级：200-500金币，高级：1000+金币。
+具体升级项与金币需求
+升级项
+初始值
+升级效果
+金币需求（递增）
+枪支-步枪
+无
+伤害从10升至20
+200
+枪支-霰弹枪
+无
+伤害15，3颗子弹
+500
+弹匣容量
+10发
++5发/级（上限30）
+50, 100, 200, 300, 500
+子弹威力
+10
++5/级（上限30）
+50, 100, 200, 300, 500
+回血企鹅
+无
+每5秒恢复10血
+300
+射击企鹅
+无
+每秒1发，伤害5
+100（已有，每只+100）
+最大血量
+100
++20/级（上限200）
+100, 200, 400
+射击速度
+每秒2发
++1发/秒（上限5）
+150, 300, 600
+护盾
+无
+减免20%伤害，持续10秒
+1000（一次性使用）
+系统实现要点
+每关结束后显示商店界面（当前用按钮模拟）。
+添加弹匣限制，射击时检查子弹数，耗尽后需冷却（模拟装弹）。
+辅助企鹅区分类型，回血企鹅新增逻辑。
+射击速度用计时器控制，护盾用一次性效果。
+修改后的完整代码
+以下代码实现了升级系统，确保游戏正常运行：
+html
+<!DOCTYPE html>
+<html>
+<head>
+    <title>企鹅堡垒防御</title>
+    <style>
+        canvas {
+            border: 1px solid black;
+            background: #e6f3ff;
+        }
+        #gameContainer {
+            text-align: center;
+            font-family: Arial, sans-serif;
+        }
+        #shop {
+            margin: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <canvas id="gameCanvas" width="800" height="400"></canvas>
+        <div id="shop">
+            <button onclick="buyGun('rifle')">步枪 (200金币)</button>
+            <button onclick="buyGun('shotgun')">霰弹枪 (500金币)</button>
+            <button onclick="upgradeMagazine()">升级弹匣 (+5发, 50起)</button>
+            <button onclick="upgradeDamage()">升级威力 (+5, 50起)</button>
+            <button onclick="buyHelper('heal')">回血企鹅 (300金币)</button>
+            <button onclick="buyHelper('shoot')">射击企鹅 (100金币)</button>
+            <button onclick="upgradeHealth()">提升血量 (+20, 100起)</button>
+            <button onclick="upgradeFireRate()">提升射速 (+1发/秒, 150起)</button>
+            <button onclick="buyShield()">护盾 (1000金币)</button>
+            <div>金币: <span id="coinCount">0</span> | 血量: <span id="healthCount">100</span> | 关卡: <span id="levelCount">1</span></div>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // 加载企鹅图片
+        const penguinImg = new Image();
+        penguinImg.src = 'https://pic5.doubanio.com/view/photo/l/public/p1095208351.webp';
+
+        // 游戏状态
+        let game = {
+            coins: 0,
+            playerHealth: 100,
+            maxHealth: 100,
+            level: 1,
+            gunType: 'pistol',
+            gunDamage: 10,
+            magazine: 10,
+            maxMagazine: 10,
+            magazineLevel: 0,
+            damageLevel: 0,
+            fireRate: 30, // 每30帧射击一次（约2发/秒）
+            fireRateLevel: 0,
+            shield: false,
+            shieldTimer: 0,
+            enemiesLeft: 0,
+            totalEnemies: 0,
+            maxLevels: 20,
+            levelMessageTimer: 0,
+            shootTimer: 0
+        };
+
+        // 玩家企鹅
+        const player = {
+            x: 700,
+            y: 100,
+            width: 40,
+            height: 40
+        };
+
+        // 数组
+        let enemies = [];
+        let bullets = [];
+        let helperBullets = [];
+        let enemyBullets = [];
+        let helpers = [];
+        let spawnInterval;
+
+        // 关卡设计
+        function designLevel(level) {
+            game.totalEnemies = level * 3 + 5;
+            game.enemiesLeft = game.totalEnemies;
+            const baseHealth = 50 + level * 5;
+            const baseSpeed = 1 + level * 0.1;
+            const interval = Math.max(200, 1000 - level * 40);
+
+            clearInterval(spawnInterval);
+            spawnInterval = setInterval(() => {
+                if (game.enemiesLeft > 0 && enemies.length < 15) {
+                    spawnEnemy(level, baseHealth, baseSpeed);
+                    game.enemiesLeft--;
+                }
+            }, interval);
+
+            game.levelMessageTimer = 120;
+        }
+
+        // 敌人生成
+        function spawnEnemy(level, baseHealth, baseSpeed) {
+            let type;
+            const roll = Math.random();
+            if (level <= 2) type = roll < 0.7 ? 0 : 1;
+            else if (level <= 4) type = roll < 0.5 ? 0 : roll < 0.8 ? 1 : 2;
+            else if (level <= 6) type = roll < 0.4 ? 0 : roll < 0.6 ? 1 : roll < 0.8 ? 2 : 3;
+            else if (level <= 8) type = roll < 0.3 ? 0 : roll < 0.5 ? 1 : roll < 0.7 ? 2 : roll < 0.9 ? 3 : 4;
+            else if (level <= 10) type = roll < 0.25 ? 0 : roll < 0.45 ? 1 : roll < 0.65 ? 2 : roll < 0.8 ? 3 : 5;
+            else if (level <= 12) type = roll < 0.2 ? 0 : roll < 0.4 ? 1 : roll < 0.6 ? 2 : roll < 0.8 ? 4 : 6;
+            else if (level <= 14) type = roll < 0.15 ? 0 : roll < 0.35 ? 3 : roll < 0.55 ? 4 : roll < 0.75 ? 5 : 7;
+            else if (level <= 16) type = roll < 0.2 ? 1 : roll < 0.4 ? 2 : roll < 0.6 ? 3 : roll < 0.8 ? 6 : 7;
+            else type = Math.floor(Math.random() * 8);
+
+            const enemy = {
+                x: 0,
+                y: Math.random() * (canvas.height - 50),
+                width: 30,
+                height: 30,
+                health: baseHealth * (type === 2 ? 2 : type === 4 ? 0.5 : type === 6 ? 0.8 : type === 7 ? 3 : 1),
+                speed: baseSpeed * (type === 1 ? 1.5 : type === 2 ? 0.5 : type === 7 ? 0.7 : 1),
+                type: type,
+                shootTimer: 0,
+                healTimer: 0,
+                stealthTimer: 0,
+                isStealth: false
+            };
+            enemies.push(enemy);
+        }
+
+        // 玩家射击
+        canvas.addEventListener('click', (e) => {
+            if (game.shootTimer <= 0 && game.magazine > 0) {
+                const rect = canvas.getBoundingClientRect();
+                const bullet = {
+                    x: player.x,
+                    y: player.y,
+                    targetX: e.clientX - rect.left,
+                    targetY: e.clientY - rect.top,
+                    speed: 5
+                };
+                bullets.push(bullet);
+                game.magazine--;
+                game.shootTimer = game.fireRate;
+                // shootSound.play(); // 后续替换射击音效URL
+            }
+        });
+
+        // 游戏循环
+        function gameLoop() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // 绘制雪山堡垒
+            ctx.fillStyle = 'white';
+            ctx.fillRect(600, 0, 200, canvas.height);
+
+            // 绘制玩家企鹅
+            if (penguinImg.complete) {
+                ctx.drawImage(penguinImg, player.x, player.y, player.width, player.height);
+                // 注释：后续替换为玩家专用图片 'playerPenguin.png'
+            } else {
+                ctx.fillStyle = 'black';
+                ctx.fillRect(player.x, player.y, player.width, player.height);
+            }
+
+            // 更新射击计时器
+            if (game.shootTimer > 0) game.shootTimer--;
+            if (game.magazine === 0 && game.shootTimer <= 0) {
+                game.magazine = game.maxMagazine; // 装弹
+                game.shootTimer = 60; // 装弹1秒
+            }
+
+            // 更新护盾
+            if (game.shield && game.shieldTimer > 0) {
+                game.shieldTimer--;
+                if (game.shieldTimer <= 0) game.shield = false;
+            }
+
+            // 更新和绘制敌人
+            enemies.forEach((enemy, index) => {
+                if (enemy.type === 3 && enemy.x >= 400) {
+                    enemy.speed = 0;
+                    enemy.shootTimer++;
+                    if (enemy.shootTimer >= 45) {
+                        enemy.shootTimer = 0;
+                        enemyBullets.push({ x: enemy.x, y: enemy.y, targetX: player.x, targetY: player.y, speed: 3 });
+                        // shootSound.play(); // 后续替换射击音效URL
+                    }
+                } else if (enemy.type === 4) {
+                    enemy.healTimer++;
+                    if (enemy.healTimer >= 120) {
+                        enemy.healTimer = 0;
+                        const healAmount = 10 + game.level * 2;
+                        enemies.forEach(other => {
+                            if (other !== enemy && Math.hypot(other.x - enemy.x, other.y - enemy.y) < 100) {
+                                other.health += healAmount;
+                            }
+                        });
+                    }
+                    enemy.x += enemy.speed;
+                } else if (enemy.type === 5) {
+                    enemy.stealthTimer++;
+                    if (enemy.stealthTimer >= 120) {
+                        enemy.stealthTimer = 0;
+                        enemy.isStealth = !enemy.isStealth;
+                    }
+                    enemy.x += enemy.speed;
+                } else {
+                    enemy.x += enemy.speed;
+                }
+
+                if (enemy.x >= 600) {
+                    game.playerHealth -= game.shield ? 4 : 5; // 护盾减免20%
+                    enemies.splice(index, 1);
+                }
+
+                if (!enemy.isStealth) {
+                    if (penguinImg.complete) {
+                        ctx.drawImage(penguinImg, enemy.x, enemy.y, enemy.width, enemy.height);
+                        // 注释：后续根据enemy.type替换，如 'normalPenguin.png', 'fastPenguin.png' 等
+                    } else {
+                        ctx.fillStyle = enemy.type === 0 ? 'gray' : enemy.type === 1 ? 'blue' : enemy.type === 2 ? 'red' :
+                                        enemy.type === 3 ? 'yellow' : enemy.type === 4 ? 'green' : enemy.type === 5 ? 'rgba(128,128,128,0.5)' :
+                                        enemy.type === 6 ? 'orange' : 'darkgray';
+                        ctx.fillRect(enemy.x, enemy.y, enemy.width, enemy.height);
+                    }
+                }
+            });
+
+            // 更新和绘制玩家子弹
+            bullets.forEach((bullet, bIndex) => {
+                const dx = bullet.targetX - bullet.x;
+                const dy = bullet.targetY - bullet.y;
+                const angle = Math.atan2(dy, dx);
+                bullet.x += Math.cos(angle) * bullet.speed;
+                bullet.y += Math.sin(angle) * bullet.speed;
+
+                ctx.fillStyle = 'red';
+                ctx.fillRect(bullet.x, bullet.y, 5, 5);
+
+                enemies.forEach((enemy, eIndex) => {
+                    if (!enemy.isStealth && bullet.x > enemy.x && bullet.x < enemy.x + enemy.width &&
+                        bullet.y > enemy.y && bullet.y < enemy.y + enemy.height) {
+                        const damage = enemy.type === 7 ? game.gunDamage * 0.5 : game.gunDamage;
+                        enemy.health -= damage;
+                        bullets.splice(bIndex, 1);
+                        // hitSound.play(); // 后续替换击中音效URL
+                        if (enemy.health <= 0) {
+                            if (enemy.type === 6) {
+                                enemies.forEach(other => {
+                                    if (other !== enemy && Math.hypot(other.x - enemy.x, other.y - enemy.y) < 50) {
+                                        other.health -= 40;
+                                    }
+                                });
+                            }
+                            enemies.splice(eIndex, 1);
+                            game.coins += 10;
+                            // deathSound.play(); // 后续替换死亡音效URL
+                        }
+                    }
+                });
+            });
+
+            // 更新和绘制辅助企鹅
+            helpers.forEach((helper, hIndex) => {
+                if (penguinImg.complete) {
+                    ctx.drawImage(penguinImg, helper.x, helper.y, 30, 30);
+                    // 注释：后续根据helper.type替换，如 'shootPenguin.png', 'healPenguin.png'
+                } else {
+                    ctx.fillStyle = helper.type === 'shoot' ? 'green' : 'cyan';
+                    ctx.fillRect(helper.x, helper.y, 30, 30);
+                }
+
+                helper.shootTimer++;
+                if (helper.type === 'shoot' && helper.shootTimer >= 60) {
+                    helper.shootTimer = 0;
+                    const target = findNearestEnemy(helper);
+                    if (target) {
+                        helperBullets.push({ x: helper.x, y: helper.y, targetX: target.x, targetY: target.y, speed: 4 });
+                        // shootSound.play(); // 后续替换射击音效URL
+                    }
+                } else if (helper.type === 'heal' && helper.shootTimer >= 300) { // 每5秒回血
+                    helper.shootTimer = 0;
+                    game.playerHealth = Math.min(game.maxHealth, game.playerHealth + 10);
+                }
+            });
+
+            // 更新和绘制辅助企鹅子弹
+            helperBullets.forEach((bullet, bIndex) => {
+                const dx = bullet.targetX - bullet.x;
+                const dy = bullet.targetY - bullet.y;
+                const angle = Math.atan2(dy, dx);
+                bullet.x += Math.cos(angle) * bullet.speed;
+                bullet.y += Math.sin(angle) * bullet.speed;
+
+                ctx.fillStyle = 'yellow';
+                ctx.fillRect(bullet.x, bullet.y, 5, 5);
+
+                enemies.forEach((enemy, eIndex) => {
+                    if (!enemy.isStealth && bullet.x > enemy.x && bullet.x < enemy.x + enemy.width &&
+                        bullet.y > enemy.y && bullet.y < enemy.y + enemy.height) {
+                        const damage = enemy.type === 7 ? 5 * 0.5 : 5;
+                        enemy.health -= damage;
+                        helperBullets.splice(bIndex, 1);
+                        // hitSound.play(); // 后续替换击中音效URL
+                        if (enemy.health <= 0) {
+                            if (enemy.type === 6) {
+                                enemies.forEach(other => {
+                                    if (other !== enemy && Math.hypot(other.x - enemy.x, other.y - enemy.y) < 50) {
+                                        other.health -= 40;
+                                    }
+                                });
+                            }
+                            enemies.splice(eIndex, 1);
+                            game.coins += 5;
+                            // deathSound.play(); // 后续替换死亡音效URL
+                        }
+                    }
+                });
+            });
+
+            // 更新和绘制远程企鹅子弹
+            enemyBullets.forEach((bullet, bIndex) => {
+                const dx = bullet.targetX - bullet.x;
+                const dy = bullet.targetY - bullet.y;
+                const angle = Math.atan2(dy, dx);
+                bullet.x += Math.cos(angle) * bullet.speed;
+                bullet.y += Math.sin(angle) * bullet.speed;
+
+                ctx.fillStyle = 'purple';
+                ctx.fillRect(bullet.x, bullet.y, 5, 5);
+
+                if (bullet.x > player.x && bullet.x < player.x + player.width &&
+                    bullet.y > player.y && bullet.y < player.y + player.height) {
+                    game.playerHealth -= game.shield ? 2.4 : 3; // 护盾减免20%
+                    enemyBullets.splice(bIndex, 1);
+                    // hitSound.play(); // 后续替换击中音效URL
+                }
+            });
+
+            // 绘制关卡提示
+            if (game.levelMessageTimer > 0) {
+                ctx.fillStyle = 'black';
+                ctx.font = '30px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText(`第 ${game.level} 关开始`, canvas.width / 2, canvas.height / 2);
+                game.levelMessageTimer--;
+            }
+
+            // 更新界面
+            document.getElementById('coinCount').textContent = game.coins;
+            document.getElementById('healthCount').textContent = `${game.playerHealth}/${game.maxHealth}`;
+
+            // 检查关卡结束
+            if (enemies.length === 0 && game.enemiesLeft === 0 && game.level <= game.maxLevels) {
+                game.coins += (game.level * 5);
+                game.level++;
+                if (game.level > game.maxLevels) {
+                    alert('恭喜通关！总得分: ' + game.coins);
+                    resetGame();
+                } else {
+                    designLevel(game.level);
+                }
+            }
+
+            // 游戏失败
+            if (game.playerHealth <= 0) {
+                // gameOverSound.play(); // 后续替换游戏结束音效URL
+                alert('游戏结束！得分: ' + game.coins);
+                resetGame();
+            }
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        // 找到最近的敌人
+        function findNearestEnemy(helper) {
+            let nearest = null;
+            let minDist = Infinity;
+            enemies.forEach(enemy => {
+                if (!enemy.isStealth) {
+                    const dist = Math.hypot(enemy.x - helper.x, enemy.y - helper.y);
+                    if (dist < minDist) {
+                        minDist = dist;
+                        nearest = enemy;
+                    }
+                }
+            });
+            return nearest;
+        }
+
+        // 商店功能
+        function buyGun(type) {
+            if (type === 'rifle' && game.coins >= 200 && game.gunType === 'pistol') {
+                game.coins -= 200;
+                game.gunType = 'rifle';
+                game.gunDamage = 20;
+                // purchaseSound.play(); // 后续替换购买音效URL
+            } else if (type === 'shotgun' && game.coins >= 500 && game.gunType !== 'shotgun') {
+                game.coins -= 500;
+                game.gunType = 'shotgun';
+                game.gunDamage = 15; // 后续可实现散射效果
+                // purchaseSound.play(); // 后续替换购买音效URL
+            }
+        }
+
+        function upgradeMagazine() {
+            const costs = [50, 100, 200, 300, 500];
+            if (game.magazineLevel < 5 && game.coins >= costs[game.magazineLevel]) {
+                game.coins -= costs[game.magazineLevel];
+                game.maxMagazine += 5;
+                game.magazineLevel++;
+                game.magazine = game.maxMagazine;
+                // purchaseSound.play(); // 后续替换购买音效URL
+            }
+        }
+
+        function upgradeDamage() {
+            const costs = [50, 100, 200, 300, 500];
+            if (game.damageLevel < 5 && game.coins >= costs[game.damageLevel]) {
+                game.coins -= costs[game.damageLevel];
+                game.gunDamage += 5;
+                game.damageLevel++;
+                // purchaseSound.play(); // 后续替换购买音效URL
+            }
+        }
+
+        function buyHelper(type) {
+            if (type === 'shoot' && game.coins >= 100) {
+                game.coins -= 100;
+                helpers.push({ x: 650, y: Math.random() * 200, shootTimer: 0, type: 'shoot' });
+                // purchaseSound.play(); // 后续替换购买音效URL
+            } else if (type === 'heal' && game.coins >= 300) {
+                game.coins -= 300;
+                helpers.push({ x: 650, y: Math.random() * 200, shootTimer: 0, type: 'heal' });
+                // purchaseSound.play(); // 后续替换购买音效URL
+            }
+        }
+
+        function upgradeHealth() {
+            const costs = [100, 200, 400];
+            if (game.maxHealth < 200 && game.coins >= costs[(game.maxHealth - 100) / 20]) {
+                game.coins -= costs[(game.maxHealth - 100) / 20];
+                game.maxHealth += 20;
+                game.playerHealth += 20;
+                // purchaseSound.play(); // 后续替换购买音效URL
+            }
+        }
+
+        function upgradeFireRate() {
+            const costs = [150, 300, 600];
+            if (game.fireRateLevel < 3 && game.coins >= costs[game.fireRateLevel]) {
+                game.coins -= costs[game.fireRateLevel];
+                game.fireRate -= 10; // 每级减少10帧（提升1发/秒）
+                game.fireRateLevel++;
+                // purchaseSound.play(); // 后续替换购买音效URL
+            }
+        }
+
+        function buyShield() {
+            if (game.coins >= 1000 && !game.shield) {
+                game.coins -= 1000;
+                game.shield = true;
+                game.shieldTimer = 600; // 10秒（600帧）
+                // purchaseSound.play(); // 后续替换购买音效URL
+            }
+        }
+
+        function resetGame() {
+            game.coins = 0;
+            game.playerHealth = 100;
+            game.maxHealth = 100;
+            game.level = 1;
+            game.gunType = 'pistol';
+            game.gunDamage = 10;
+            game.magazine = 10;
+            game.maxMagazine = 10;
+            game.magazineLevel = 0;
+            game.damageLevel = 0;
+            game.fireRate = 30;
+            game.fireRateLevel = 0;
+            game.shield = false;
+            game.shieldTimer = 0;
+            game.enemiesLeft = 0;
+            game.totalEnemies = 0;
+            enemies = [];
+            bullets = [];
+            helperBullets = [];
+            enemyBullets = [];
+            helpers = [];
+            designLevel(1);
+        }
+
+        // 图片加载后启动游戏
+        penguinImg.onload = () => {
+            designLevel(1);
+            gameLoop();
+        };
+    </script>
+</body>
+</html>
+修改说明
+商店升级项：
+枪支：新增 buyGun(type)，支持步枪（200金币，伤害20）和霰弹枪（500金币，伤害15，散射待实现）。
+弹匣容量：初始10发，5级升级，每次+5发，成本50-500。
+子弹威力：初始10，5级升级，每次+5，成本50-500。
+辅助企鹅：射击企鹅（100金币）和回血企鹅（300金币），type 区分。
+最大血量：初始100，3级升级，每次+20，成本100-400。
+射击速度：初始每秒2发（30帧），3级升级，每次+1发/秒，成本150-600。
+护盾：一次性1000金币，减免20%伤害，持续10秒。
+游戏逻辑调整：
+射击限制：新增 shootTimer 和 magazine，射击受弹匣和射速控制，耗尽弹匣后1秒装弹。
+回血企鹅：每5秒（300帧）恢复10血。
+护盾：用 shieldTimer 计时，减免20%伤害（5->4，3->2.4）。
+金币平衡：
+总收入约3050金币，升级总成本约3800金币（不含多只企鹅），玩家需选择性购买。
+每关结束后自动奖励 level * 5，商店按钮随时可用。
+图片与音效：
+所有企鹅使用同一图片，注释标明后续替换。
+音效调用保留注释，确保无报错。
+测试与运行
+保存为 .html，浏览器打开应正常运行。
+玩家初始手枪（10发，伤害10），可通过商店升级。
+辅助企鹅分射击和回血两种，显示为同一图片（后续替换）。
+关卡提示、难度逻辑、奖励机制保持不变。
+下一步建议
+霰弹枪散射：实现多子弹射击效果。
+javascript
+if (game.gunType === 'shotgun') {
+    for (let i = 0; i < 3; i++) {
+        bullets.push({ x: player.x, y: player.y, targetX: e.clientX - rect.left + (i-1)*10, targetY: e.clientY - rect.top, speed: 5 });
+    }
+}
+商店界面：每关结束后弹出模态窗口显示升级项。
+资源替换：提供不同图片和音效URL，我帮你集成。
+平衡调整：根据实际游玩反馈调整金币需求或升级效果。
+请确认游戏是否正常运行，或提供进一步修改需求（如调整成本、添加新升级项），我再帮你优化！
+
+
+下面这里是直接复制的html，上面是全选复制的，可能太长没法直接用自带的复制按钮，就全选复制了，格式不知道哪个好都留着
+
+
+
+
+<!DOCTYPE html>
+<html>
+<head>
+    <title>企鹅堡垒防御</title>
+    <style>
+        canvas {
+            border: 1px solid black;
+            background: #e6f3ff;
+        }
+        #gameContainer {
+            text-align: center;
+            font-family: Arial, sans-serif;
+        }
+        #shop {
+            margin: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <canvas id="gameCanvas" width="800" height="400"></canvas>
+        <div id="shop">
+            <button onclick="buyGun('rifle')">步枪 (200金币)</button>
+            <button onclick="buyGun('shotgun')">霰弹枪 (500金币)</button>
+            <button onclick="upgradeMagazine()">升级弹匣 (+5发, 50起)</button>
+            <button onclick="upgradeDamage()">升级威力 (+5, 50起)</button>
+            <button onclick="buyHelper('heal')">回血企鹅 (300金币)</button>
+            <button onclick="buyHelper('shoot')">射击企鹅 (100金币)</button>
+            <button onclick="upgradeHealth()">提升血量 (+20, 100起)</button>
+            <button onclick="upgradeFireRate()">提升射速 (+1发/秒, 150起)</button>
+            <button onclick="buyShield()">护盾 (1000金币)</button>
+            <div>金币: <span id="coinCount">0</span> | 血量: <span id="healthCount">100</span> | 关卡: <span id="levelCount">1</span></div>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // 加载企鹅图片
+        const penguinImg = new Image();
+        penguinImg.src = 'https://pic5.doubanio.com/view/photo/l/public/p1095208351.webp';
+
+        // 游戏状态
+        let game = {
+            coins: 0,
+            playerHealth: 100,
+            maxHealth: 100,
+            level: 1,
+            gunType: 'pistol',
+            gunDamage: 10,
+            magazine: 10,
+            maxMagazine: 10,
+            magazineLevel: 0,
+            damageLevel: 0,
+            fireRate: 30, // 每30帧射击一次（约2发/秒）
+            fireRateLevel: 0,
+            shield: false,
+            shieldTimer: 0,
+            enemiesLeft: 0,
+            totalEnemies: 0,
+            maxLevels: 20,
+            levelMessageTimer: 0,
+            shootTimer: 0
+        };
+
+        // 玩家企鹅
+        const player = {
+            x: 700,
+            y: 100,
+            width: 40,
+            height: 40
+        };
+
+        // 数组
+        let enemies = [];
+        let bullets = [];
+        let helperBullets = [];
+        let enemyBullets = [];
+        let helpers = [];
+        let spawnInterval;
+
+        // 关卡设计
+        function designLevel(level) {
+            game.totalEnemies = level * 3 + 5;
+            game.enemiesLeft = game.totalEnemies;
+            const baseHealth = 50 + level * 5;
+            const baseSpeed = 1 + level * 0.1;
+            const interval = Math.max(200, 1000 - level * 40);
+
+            clearInterval(spawnInterval);
+            spawnInterval = setInterval(() => {
+                if (game.enemiesLeft > 0 && enemies.length < 15) {
+                    spawnEnemy(level, baseHealth, baseSpeed);
+                    game.enemiesLeft--;
+                }
+            }, interval);
+
+            game.levelMessageTimer = 120;
+        }
+
+        // 敌人生成
+        function spawnEnemy(level, baseHealth, baseSpeed) {
+            let type;
+            const roll = Math.random();
+            if (level <= 2) type = roll < 0.7 ? 0 : 1;
+            else if (level <= 4) type = roll < 0.5 ? 0 : roll < 0.8 ? 1 : 2;
+            else if (level <= 6) type = roll < 0.4 ? 0 : roll < 0.6 ? 1 : roll < 0.8 ? 2 : 3;
+            else if (level <= 8) type = roll < 0.3 ? 0 : roll < 0.5 ? 1 : roll < 0.7 ? 2 : roll < 0.9 ? 3 : 4;
+            else if (level <= 10) type = roll < 0.25 ? 0 : roll < 0.45 ? 1 : roll < 0.65 ? 2 : roll < 0.8 ? 3 : 5;
+            else if (level <= 12) type = roll < 0.2 ? 0 : roll < 0.4 ? 1 : roll < 0.6 ? 2 : roll < 0.8 ? 4 : 6;
+            else if (level <= 14) type = roll < 0.15 ? 0 : roll < 0.35 ? 3 : roll < 0.55 ? 4 : roll < 0.75 ? 5 : 7;
+            else if (level <= 16) type = roll < 0.2 ? 1 : roll < 0.4 ? 2 : roll < 0.6 ? 3 : roll < 0.8 ? 6 : 7;
+            else type = Math.floor(Math.random() * 8);
+
+            const enemy = {
+                x: 0,
+                y: Math.random() * (canvas.height - 50),
+                width: 30,
+                height: 30,
+                health: baseHealth * (type === 2 ? 2 : type === 4 ? 0.5 : type === 6 ? 0.8 : type === 7 ? 3 : 1),
+                speed: baseSpeed * (type === 1 ? 1.5 : type === 2 ? 0.5 : type === 7 ? 0.7 : 1),
+                type: type,
+                shootTimer: 0,
+                healTimer: 0,
+                stealthTimer: 0,
+                isStealth: false
+            };
+            enemies.push(enemy);
+        }
+
+        // 玩家射击
+        canvas.addEventListener('click', (e) => {
+            if (game.shootTimer <= 0 && game.magazine > 0) {
+                const rect = canvas.getBoundingClientRect();
+                const bullet = {
+                    x: player.x,
+                    y: player.y,
+                    targetX: e.clientX - rect.left,
+                    targetY: e.clientY - rect.top,
+                    speed: 5
+                };
+                bullets.push(bullet);
+                game.magazine--;
+                game.shootTimer = game.fireRate;
+                // shootSound.play(); // 后续替换射击音效URL
+            }
+        });
+
+        // 游戏循环
+        function gameLoop() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // 绘制雪山堡垒
+            ctx.fillStyle = 'white';
+            ctx.fillRect(600, 0, 200, canvas.height);
+
+            // 绘制玩家企鹅
+            if (penguinImg.complete) {
+                ctx.drawImage(penguinImg, player.x, player.y, player.width, player.height);
+                // 注释：后续替换为玩家专用图片 'playerPenguin.png'
+            } else {
+                ctx.fillStyle = 'black';
+                ctx.fillRect(player.x, player.y, player.width, player.height);
+            }
+
+            // 更新射击计时器
+            if (game.shootTimer > 0) game.shootTimer--;
+            if (game.magazine === 0 && game.shootTimer <= 0) {
+                game.magazine = game.maxMagazine; // 装弹
+                game.shootTimer = 60; // 装弹1秒
+            }
+
+            // 更新护盾
+            if (game.shield && game.shieldTimer > 0) {
+                game.shieldTimer--;
+                if (game.shieldTimer <= 0) game.shield = false;
+            }
+
+            // 更新和绘制敌人
+            enemies.forEach((enemy, index) => {
+                if (enemy.type === 3 && enemy.x >= 400) {
+                    enemy.speed = 0;
+                    enemy.shootTimer++;
+                    if (enemy.shootTimer >= 45) {
+                        enemy.shootTimer = 0;
+                        enemyBullets.push({ x: enemy.x, y: enemy.y, targetX: player.x, targetY: player.y, speed: 3 });
+                        // shootSound.play(); // 后续替换射击音效URL
+                    }
+                } else if (enemy.type === 4) {
+                    enemy.healTimer++;
+                    if (enemy.healTimer >= 120) {
+                        enemy.healTimer = 0;
+                        const healAmount = 10 + game.level * 2;
+                        enemies.forEach(other => {
+                            if (other !== enemy && Math.hypot(other.x - enemy.x, other.y - enemy.y) < 100) {
+                                other.health += healAmount;
+                            }
+                        });
+                    }
+                    enemy.x += enemy.speed;
+                } else if (enemy.type === 5) {
+                    enemy.stealthTimer++;
+                    if (enemy.stealthTimer >= 120) {
+                        enemy.stealthTimer = 0;
+                        enemy.isStealth = !enemy.isStealth;
+                    }
+                    enemy.x += enemy.speed;
+                } else {
+                    enemy.x += enemy.speed;
+                }
+
+                if (enemy.x >= 600) {
+                    game.playerHealth -= game.shield ? 4 : 5; // 护盾减免20%
+                    enemies.splice(index, 1);
+                }
+
+                if (!enemy.isStealth) {
+                    if (penguinImg.complete) {
+                        ctx.drawImage(penguinImg, enemy.x, enemy.y, enemy.width, enemy.height);
+                        // 注释：后续根据enemy.type替换，如 'normalPenguin.png', 'fastPenguin.png' 等
+                    } else {
+                        ctx.fillStyle = enemy.type === 0 ? 'gray' : enemy.type === 1 ? 'blue' : enemy.type === 2 ? 'red' :
+                                        enemy.type === 3 ? 'yellow' : enemy.type === 4 ? 'green' : enemy.type === 5 ? 'rgba(128,128,128,0.5)' :
+                                        enemy.type === 6 ? 'orange' : 'darkgray';
+                        ctx.fillRect(enemy.x, enemy.y, enemy.width, enemy.height);
+                    }
+                }
+            });
+
+            // 更新和绘制玩家子弹
+            bullets.forEach((bullet, bIndex) => {
+                const dx = bullet.targetX - bullet.x;
+                const dy = bullet.targetY - bullet.y;
+                const angle = Math.atan2(dy, dx);
+                bullet.x += Math.cos(angle) * bullet.speed;
+                bullet.y += Math.sin(angle) * bullet.speed;
+
+                ctx.fillStyle = 'red';
+                ctx.fillRect(bullet.x, bullet.y, 5, 5);
+
+                enemies.forEach((enemy, eIndex) => {
+                    if (!enemy.isStealth && bullet.x > enemy.x && bullet.x < enemy.x + enemy.width &&
+                        bullet.y > enemy.y && bullet.y < enemy.y + enemy.height) {
+                        const damage = enemy.type === 7 ? game.gunDamage * 0.5 : game.gunDamage;
+                        enemy.health -= damage;
+                        bullets.splice(bIndex, 1);
+                        // hitSound.play(); // 后续替换击中音效URL
+                        if (enemy.health <= 0) {
+                            if (enemy.type === 6) {
+                                enemies.forEach(other => {
+                                    if (other !== enemy && Math.hypot(other.x - enemy.x, other.y - enemy.y) < 50) {
+                                        other.health -= 40;
+                                    }
+                                });
+                            }
+                            enemies.splice(eIndex, 1);
+                            game.coins += 10;
+                            // deathSound.play(); // 后续替换死亡音效URL
+                        }
+                    }
+                });
+            });
+
+            // 更新和绘制辅助企鹅
+            helpers.forEach((helper, hIndex) => {
+                if (penguinImg.complete) {
+                    ctx.drawImage(penguinImg, helper.x, helper.y, 30, 30);
+                    // 注释：后续根据helper.type替换，如 'shootPenguin.png', 'healPenguin.png'
+                } else {
+                    ctx.fillStyle = helper.type === 'shoot' ? 'green' : 'cyan';
+                    ctx.fillRect(helper.x, helper.y, 30, 30);
+                }
+
+                helper.shootTimer++;
+                if (helper.type === 'shoot' && helper.shootTimer >= 60) {
+                    helper.shootTimer = 0;
+                    const target = findNearestEnemy(helper);
+                    if (target) {
+                        helperBullets.push({ x: helper.x, y: helper.y, targetX: target.x, targetY: target.y, speed: 4 });
+                        // shootSound.play(); // 后续替换射击音效URL
+                    }
+                } else if (helper.type === 'heal' && helper.shootTimer >= 300) { // 每5秒回血
+                    helper.shootTimer = 0;
+                    game.playerHealth = Math.min(game.maxHealth, game.playerHealth + 10);
+                }
+            });
+
+            // 更新和绘制辅助企鹅子弹
+            helperBullets.forEach((bullet, bIndex) => {
+                const dx = bullet.targetX - bullet.x;
+                const dy = bullet.targetY - bullet.y;
+                const angle = Math.atan2(dy, dx);
+                bullet.x += Math.cos(angle) * bullet.speed;
+                bullet.y += Math.sin(angle) * bullet.speed;
+
+                ctx.fillStyle = 'yellow';
+                ctx.fillRect(bullet.x, bullet.y, 5, 5);
+
+                enemies.forEach((enemy, eIndex) => {
+                    if (!enemy.isStealth && bullet.x > enemy.x && bullet.x < enemy.x + enemy.width &&
+                        bullet.y > enemy.y && bullet.y < enemy.y + enemy.height) {
+                        const damage = enemy.type === 7 ? 5 * 0.5 : 5;
+                        enemy.health -= damage;
+                        helperBullets.splice(bIndex, 1);
+                        // hitSound.play(); // 后续替换击中音效URL
+                        if (enemy.health <= 0) {
+                            if (enemy.type === 6) {
+                                enemies.forEach(other => {
+                                    if (other !== enemy && Math.hypot(other.x - enemy.x, other.y - enemy.y) < 50) {
+                                        other.health -= 40;
+                                    }
+                                });
+                            }
+                            enemies.splice(eIndex, 1);
+                            game.coins += 5;
+                            // deathSound.play(); // 后续替换死亡音效URL
+                        }
+                    }
+                });
+            });
+
+            // 更新和绘制远程企鹅子弹
+            enemyBullets.forEach((bullet, bIndex) => {
+                const dx = bullet.targetX - bullet.x;
+                const dy = bullet.targetY - bullet.y;
+                const angle = Math.atan2(dy, dx);
+                bullet.x += Math.cos(angle) * bullet.speed;
+                bullet.y += Math.sin(angle) * bullet.speed;
+
+                ctx.fillStyle = 'purple';
+                ctx.fillRect(bullet.x, bullet.y, 5, 5);
+
+                if (bullet.x > player.x && bullet.x < player.x + player.width &&
+                    bullet.y > player.y && bullet.y < player.y + player.height) {
+                    game.playerHealth -= game.shield ? 2.4 : 3; // 护盾减免20%
+                    enemyBullets.splice(bIndex, 1);
+                    // hitSound.play(); // 后续替换击中音效URL
+                }
+            });
+
+            // 绘制关卡提示
+            if (game.levelMessageTimer > 0) {
+                ctx.fillStyle = 'black';
+                ctx.font = '30px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText(`第 ${game.level} 关开始`, canvas.width / 2, canvas.height / 2);
+                game.levelMessageTimer--;
+            }
+
+            // 更新界面
+            document.getElementById('coinCount').textContent = game.coins;
+            document.getElementById('healthCount').textContent = `${game.playerHealth}/${game.maxHealth}`;
+
+            // 检查关卡结束
+            if (enemies.length === 0 && game.enemiesLeft === 0 && game.level <= game.maxLevels) {
+                game.coins += (game.level * 5);
+                game.level++;
+                if (game.level > game.maxLevels) {
+                    alert('恭喜通关！总得分: ' + game.coins);
+                    resetGame();
+                } else {
+                    designLevel(game.level);
+                }
+            }
+
+            // 游戏失败
+            if (game.playerHealth <= 0) {
+                // gameOverSound.play(); // 后续替换游戏结束音效URL
+                alert('游戏结束！得分: ' + game.coins);
+                resetGame();
+            }
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        // 找到最近的敌人
+        function findNearestEnemy(helper) {
+            let nearest = null;
+            let minDist = Infinity;
+            enemies.forEach(enemy => {
+                if (!enemy.isStealth) {
+                    const dist = Math.hypot(enemy.x - helper.x, enemy.y - helper.y);
+                    if (dist < minDist) {
+                        minDist = dist;
+                        nearest = enemy;
+                    }
+                }
+            });
+            return nearest;
+        }
+
+        // 商店功能
+        function buyGun(type) {
+            if (type === 'rifle' && game.coins >= 200 && game.gunType === 'pistol') {
+                game.coins -= 200;
+                game.gunType = 'rifle';
+                game.gunDamage = 20;
+                // purchaseSound.play(); // 后续替换购买音效URL
+            } else if (type === 'shotgun' && game.coins >= 500 && game.gunType !== 'shotgun') {
+                game.coins -= 500;
+                game.gunType = 'shotgun';
+                game.gunDamage = 15; // 后续可实现散射效果
+                // purchaseSound.play(); // 后续替换购买音效URL
+            }
+        }
+
+        function upgradeMagazine() {
+            const costs = [50, 100, 200, 300, 500];
+            if (game.magazineLevel < 5 && game.coins >= costs[game.magazineLevel]) {
+                game.coins -= costs[game.magazineLevel];
+                game.maxMagazine += 5;
+                game.magazineLevel++;
+                game.magazine = game.maxMagazine;
+                // purchaseSound.play(); // 后续替换购买音效URL
+            }
+        }
+
+        function upgradeDamage() {
+            const costs = [50, 100, 200, 300, 500];
+            if (game.damageLevel < 5 && game.coins >= costs[game.damageLevel]) {
+                game.coins -= costs[game.damageLevel];
+                game.gunDamage += 5;
+                game.damageLevel++;
+                // purchaseSound.play(); // 后续替换购买音效URL
+            }
+        }
+
+        function buyHelper(type) {
+            if (type === 'shoot' && game.coins >= 100) {
+                game.coins -= 100;
+                helpers.push({ x: 650, y: Math.random() * 200, shootTimer: 0, type: 'shoot' });
+                // purchaseSound.play(); // 后续替换购买音效URL
+            } else if (type === 'heal' && game.coins >= 300) {
+                game.coins -= 300;
+                helpers.push({ x: 650, y: Math.random() * 200, shootTimer: 0, type: 'heal' });
+                // purchaseSound.play(); // 后续替换购买音效URL
+            }
+        }
+
+        function upgradeHealth() {
+            const costs = [100, 200, 400];
+            if (game.maxHealth < 200 && game.coins >= costs[(game.maxHealth - 100) / 20]) {
+                game.coins -= costs[(game.maxHealth - 100) / 20];
+                game.maxHealth += 20;
+                game.playerHealth += 20;
+                // purchaseSound.play(); // 后续替换购买音效URL
+            }
+        }
+
+        function upgradeFireRate() {
+            const costs = [150, 300, 600];
+            if (game.fireRateLevel < 3 && game.coins >= costs[game.fireRateLevel]) {
+                game.coins -= costs[game.fireRateLevel];
+                game.fireRate -= 10; // 每级减少10帧（提升1发/秒）
+                game.fireRateLevel++;
+                // purchaseSound.play(); // 后续替换购买音效URL
+            }
+        }
+
+        function buyShield() {
+            if (game.coins >= 1000 && !game.shield) {
+                game.coins -= 1000;
+                game.shield = true;
+                game.shieldTimer = 600; // 10秒（600帧）
+                // purchaseSound.play(); // 后续替换购买音效URL
+            }
+        }
+
+        function resetGame() {
+            game.coins = 0;
+            game.playerHealth = 100;
+            game.maxHealth = 100;
+            game.level = 1;
+            game.gunType = 'pistol';
+            game.gunDamage = 10;
+            game.magazine = 10;
+            game.maxMagazine = 10;
+            game.magazineLevel = 0;
+            game.damageLevel = 0;
+            game.fireRate = 30;
+            game.fireRateLevel = 0;
+            game.shield = false;
+            game.shieldTimer = 0;
+            game.enemiesLeft = 0;
+            game.totalEnemies = 0;
+            enemies = [];
+            bullets = [];
+            helperBullets = [];
+            enemyBullets = [];
+            helpers = [];
+            designLevel(1);
+        }
+
+        // 图片加载后启动游戏
+        penguinImg.onload = () => {
+            designLevel(1);
+            gameLoop();
+        };
+    </script>
+</body>
+</html>
+
+
+
+
+
+
+下面是新的对话，这里用来区分上面的代码
+
+升级系统细节
+
+我会详细说明当前升级系统的细节，并对其进行优化和完善，确保功能清晰且平衡。以下是升级系统的详细设计，包括每个升级项的具体效果、实现逻辑、金币需求，以及与关卡金币收入的对应关系。之后，我会更新代码，解决潜在问题并补充细节。
+升级系统细节设计
+当前升级项概览
+以下是现有升级项的详细说明，包括初始值、升级效果、限制、金币成本，以及实现逻辑。
+不同枪支 (Gun Type)：
+手枪 (Pistol)：
+初始拥有，伤害10，单发子弹。
+步枪 (Rifle)：
+效果：伤害提升至20，单发子弹。
+限制：只能从手枪升级，不可重复购买。
+成本：200金币。
+实现：切换 game.gunType 并设置 game.gunDamage。
+霰弹枪 (Shotgun)：
+效果：伤害15，发射3颗子弹（散射，当前未实现）。
+限制：不可重复购买，覆盖现有枪支。
+成本：500金币。
+实现：切换 game.gunType，后续需添加散射逻辑。
+弹匣容量 (Magazine Capacity)：
+初始值：10发。
+效果：每次升级增加5发，上限30发（5级）。
+成本：50, 100, 200, 300, 500（逐级递增）。
+实现：增加 game.maxMagazine，每次射击消耗 game.magazine，耗尽后装弹。
+子弹威力 (Bullet Damage)：
+初始值：10（手枪）。
+效果：每次升级增加5，上限30（5级）。
+成本：50, 100, 200, 300, 500。
+实现：调整 game.gunDamage，与枪支类型叠加。
+辅助企鹅 (Helper Penguins)：
+射击企鹅 (Shoot Penguin)：
+效果：每秒1发，伤害5。
+成本：每只100金币，无上限。
+实现：添加至 helpers 数组，type: 'shoot'。
+回血企鹅 (Heal Penguin)：
+效果：每5秒恢复10血。
+成本：每只300金币，无上限。
+实现：添加至 helpers 数组，type: 'heal'。
+最大血量 (Max Health)：
+初始值：100。
+效果：每次升级增加20，上限200（3级）。
+成本：100, 200, 400。
+实现：增加 game.maxHealth 并同步提升 game.playerHealth。
+射击速度 (Fire Rate)：
+初始值：每秒2发（30帧间隔）。
+效果：每次升级减少10帧（约+1发/秒），下限6帧（约5发/秒，3级）。
+成本：150, 300, 600。
+实现：调整 game.fireRate，控制射击间隔。
+护盾 (Shield)：
+初始值：无。
+效果：减免20%伤害，持续10秒（600帧）。
+成本：1000金币，一次性使用。
+实现：设置 game.shield 和 game.shieldTimer，动态减免伤害。
+金币收入与升级匹配
+关卡收入：
+基础奖励：level * 5，20关总计1050金币。
+击杀收入：普通敌人10金币/只，辅助企鹅5金币/只，假设每关10个敌人（总计2000金币）。
+总估算：约3050金币。
+升级总成本：
+枪支：200（步枪）+500（霰弹枪）=700。
+弹匣：50+100+200+300+500=1150。
+威力：50+100+200+300+500=1150。
+辅助企鹅：100（1射击）+300（1回血）=400（假设买2只）。
+血量：100+200+400=700。
+射速：150+300+600=1050。
+护盾：1000。
+总计：约6150金币。
+平衡调整：
+当前收入（3050）远低于满升级成本（6150），需选择性购买。
+可通过增加击杀奖励或降低部分成本优化。
+细节优化建议
+霰弹枪散射：实现3颗子弹，角度略偏。
+弹匣冷却：显示装弹进度。
+辅助企鹅上限：限制总数（如5只）。
+护盾冷却：添加购买间隔。
+修改后的完整代码
+以下代码完善了升级系统细节，添加霰弹枪散射，并优化逻辑：
+html
+<!DOCTYPE html>
+<html>
+<head>
+    <title>企鹅堡垒防御</title>
+    <style>
+        canvas {
+            border: 1px solid black;
+            background: #e6f3ff;
+        }
+        #gameContainer {
+            text-align: center;
+            font-family: Arial, sans-serif;
+        }
+        #shop {
+            margin: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <canvas id="gameCanvas" width="800" height="400"></canvas>
+        <div id="shop">
+            <button onclick="buyGun('rifle')">步枪 (200金币)</button>
+            <button onclick="buyGun('shotgun')">霰弹枪 (500金币)</button>
+            <button onclick="upgradeMagazine()">升级弹匣 (+5发, 50起)</button>
+            <button onclick="upgradeDamage()">升级威力 (+5, 50起)</button>
+            <button onclick="buyHelper('heal')">回血企鹅 (300金币)</button>
+            <button onclick="buyHelper('shoot')">射击企鹅 (100金币)</button>
+            <button onclick="upgradeHealth()">提升血量 (+20, 100起)</button>
+            <button onclick="upgradeFireRate()">提升射速 (+1发/秒, 150起)</button>
+            <button onclick="buyShield()">护盾 (1000金币)</button>
+            <div>金币: <span id="coinCount">0</span> | 血量: <span id="healthCount">100</span> | 关卡: <span id="levelCount">1</span> | 子弹: <span id="magazineCount">10</span></div>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // 加载企鹅图片
+        const penguinImg = new Image();
+        penguinImg.src = 'https://pic5.doubanio.com/view/photo/l/public/p1095208351.webp';
+
+        // 游戏状态
+        let game = {
+            coins: 0,
+            playerHealth: 100,
+            maxHealth: 100,
+            level: 1,
+            gunType: 'pistol',
+            gunDamage: 10,
+            magazine: 10,
+            maxMagazine: 10,
+            magazineLevel: 0,
+            damageLevel: 0,
+            fireRate: 30,
+            fireRateLevel: 0,
+            shield: false,
+            shieldTimer: 0,
+            enemiesLeft: 0,
+            totalEnemies: 0,
+            maxLevels: 20,
+            levelMessageTimer: 0,
+            shootTimer: 0
+        };
+
+        // 玩家企鹅
+        const player = {
+            x: 700,
+            y: 100,
+            width: 40,
+            height: 40
+        };
+
+        // 数组
+        let enemies = [];
+        let bullets = [];
+        let helperBullets = [];
+        let enemyBullets = [];
+        let helpers = [];
+        let spawnInterval;
+
+        // 关卡设计
+        function designLevel(level) {
+            game.totalEnemies = level * 3 + 5;
+            game.enemiesLeft = game.totalEnemies;
+            const baseHealth = 50 + level * 5;
+            const baseSpeed = 1 + level * 0.1;
+            const interval = Math.max(200, 1000 - level * 40);
+
+            clearInterval(spawnInterval);
+            spawnInterval = setInterval(() => {
+                if (game.enemiesLeft > 0 && enemies.length < 15) {
+                    spawnEnemy(level, baseHealth, baseSpeed);
+                    game.enemiesLeft--;
+                }
+            }, interval);
+
+            game.levelMessageTimer = 120;
+        }
+
+        // 敌人生成
+        function spawnEnemy(level, baseHealth, baseSpeed) {
+            let type;
+            const roll = Math.random();
+            if (level <= 2) type = roll < 0.7 ? 0 : 1;
+            else if (level <= 4) type = roll < 0.5 ? 0 : roll < 0.8 ? 1 : 2;
+            else if (level <= 6) type = roll < 0.4 ? 0 : roll < 0.6 ? 1 : roll < 0.8 ? 2 : 3;
+            else if (level <= 8) type = roll < 0.3 ? 0 : roll < 0.5 ? 1 : roll < 0.7 ? 2 : roll < 0.9 ? 3 : 4;
+            else if (level <= 10) type = roll < 0.25 ? 0 : roll < 0.45 ? 1 : roll < 0.65 ? 2 : roll < 0.8 ? 3 : 5;
+            else if (level <= 12) type = roll < 0.2 ? 0 : roll < 0.4 ? 1 : roll < 0.6 ? 2 : roll < 0.8 ? 4 : 6;
+            else if (level <= 14) type = roll < 0.15 ? 0 : roll < 0.35 ? 3 : roll < 0.55 ? 4 : roll < 0.75 ? 5 : 7;
+            else if (level <= 16) type = roll < 0.2 ? 1 : roll < 0.4 ? 2 : roll < 0.6 ? 3 : roll < 0.8 ? 6 : 7;
+            else type = Math.floor(Math.random() * 8);
+
+            const enemy = {
+                x: 0,
+                y: Math.random() * (canvas.height - 50),
+                width: 30,
+                height: 30,
+                health: baseHealth * (type === 2 ? 2 : type === 4 ? 0.5 : type === 6 ? 0.8 : type === 7 ? 3 : 1),
+                speed: baseSpeed * (type === 1 ? 1.5 : type === 2 ? 0.5 : type === 7 ? 0.7 : 1),
+                type: type,
+                shootTimer: 0,
+                healTimer: 0,
+                stealthTimer: 0,
+                isStealth: false
+            };
+            enemies.push(enemy);
+        }
+
+        // 玩家射击
+        canvas.addEventListener('click', (e) => {
+            if (game.shootTimer <= 0 && game.magazine > 0) {
+                const rect = canvas.getBoundingClientRect();
+                if (game.gunType === 'shotgun') {
+                    for (let i = 0; i < 3; i++) {
+                        bullets.push({
+                            x: player.x,
+                            y: player.y,
+                            targetX: e.clientX - rect.left + (i - 1) * 10,
+                            targetY: e.clientY - rect.top,
+                            speed: 5
+                        });
+                    }
+                } else {
+                    bullets.push({
+                        x: player.x,
+                        y: player.y,
+                        targetX: e.clientX - rect.left,
+                        targetY: e.clientY - rect.top,
+                        speed: 5
+                    });
+                }
+                game.magazine--;
+                game.shootTimer = game.fireRate;
+                // shootSound.play(); // 后续替换射击音效URL
+            }
+        });
+
+        // 游戏循环
+        function gameLoop() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // 绘制雪山堡垒
+            ctx.fillStyle = 'white';
+            ctx.fillRect(600, 0, 200, canvas.height);
+
+            // 绘制玩家企鹅
+            if (penguinImg.complete) {
+                ctx.drawImage(penguinImg, player.x, player.y, player.width, player.height);
+                // 注释：后续替换为 'playerPenguin.png'
+            } else {
+                ctx.fillStyle = 'black';
+                ctx.fillRect(player.x, player.y, player.width, player.height);
+            }
+
+            // 更新射击和弹匣
+            if (game.shootTimer > 0) game.shootTimer--;
+            if (game.magazine === 0 && game.shootTimer <= 0) {
+                game.magazine = game.maxMagazine;
+                game.shootTimer = 60; // 装弹1秒
+            }
+
+            // 更新护盾
+            if (game.shield && game.shieldTimer > 0) {
+                game.shieldTimer--;
+                if (game.shieldTimer <= 0) game.shield = false;
+            }
+
+            // 更新和绘制敌人
+            enemies.forEach((enemy, index) => {
+                if (enemy.type === 3 && enemy.x >= 400) {
+                    enemy.speed = 0;
+                    enemy.shootTimer++;
+                    if (enemy.shootTimer >= 45) {
+                        enemy.shootTimer = 0;
+                        enemyBullets.push({ x: enemy.x, y: enemy.y, targetX: player.x, targetY: player.y, speed: 3 });
+                        // shootSound.play(); // 后续替换射击音效URL
+                    }
+                } else if (enemy.type === 4) {
+                    enemy.healTimer++;
+                    if (enemy.healTimer >= 120) {
+                        enemy.healTimer = 0;
+                        const healAmount = 10 + game.level * 2;
+                        enemies.forEach(other => {
+                            if (other !== enemy && Math.hypot(other.x - enemy.x, other.y - enemy.y) < 100) {
+                                other.health += healAmount;
+                            }
+                        });
+                    }
+                    enemy.x += enemy.speed;
+                } else if (enemy.type === 5) {
+                    enemy.stealthTimer++;
+                    if (enemy.stealthTimer >= 120) {
+                        enemy.stealthTimer = 0;
+                        enemy.isStealth = !enemy.isStealth;
+                    }
+                    enemy.x += enemy.speed;
+                } else {
+                    enemy.x += enemy.speed;
+                }
+
+                if (enemy.x >= 600) {
+                    game.playerHealth -= game.shield ? 4 : 5;
+                    enemies.splice(index, 1);
+                }
+
+                if (!enemy.isStealth) {
+                    if (penguinImg.complete) {
+                        ctx.drawImage(penguinImg, enemy.x, enemy.y, enemy.width, enemy.height);
+                        // 注释：后续根据enemy.type替换，如 'normalPenguin.png', 'fastPenguin.png' 等
+                    } else {
+                        ctx.fillStyle = enemy.type === 0 ? 'gray' : enemy.type === 1 ? 'blue' : enemy.type === 2 ? 'red' :
+                                        enemy.type === 3 ? 'yellow' : enemy.type === 4 ? 'green' : enemy.type === 5 ? 'rgba(128,128,128,0.5)' :
+                                        enemy.type === 6 ? 'orange' : 'darkgray';
+                        ctx.fillRect(enemy.x, enemy.y, enemy.width, enemy.height);
+                    }
+                }
+            });
+
+            // 更新和绘制玩家子弹
+            bullets.forEach((bullet, bIndex) => {
+                const dx = bullet.targetX - bullet.x;
+                const dy = bullet.targetY - bullet.y;
+                const angle = Math.atan2(dy, dx);
+                bullet.x += Math.cos(angle) * bullet.speed;
+                bullet.y += Math.sin(angle) * bullet.speed;
+
+                ctx.fillStyle = 'red';
+                ctx.fillRect(bullet.x, bullet.y, 5, 5);
+
+                enemies.forEach((enemy, eIndex) => {
+                    if (!enemy.isStealth && bullet.x > enemy.x && bullet.x < enemy.x + enemy.width &&
+                        bullet.y > enemy.y && bullet.y < enemy.y + enemy.height) {
+                        const damage = enemy.type === 7 ? game.gunDamage * 0.5 : game.gunDamage;
+                        enemy.health -= damage;
+                        bullets.splice(bIndex, 1);
+                        // hitSound.play(); // 后续替换击中音效URL
+                        if (enemy.health <= 0) {
+                            if (enemy.type === 6) {
+                                enemies.forEach(other => {
+                                    if (other !== enemy && Math.hypot(other.x - enemy.x, other.y - enemy.y) < 50) {
+                                        other.health -= 40;
+                                    }
+                                });
+                            }
+                            enemies.splice(eIndex, 1);
+                            game.coins += 10;
+                            // deathSound.play(); // 后续替换死亡音效URL
+                        }
+                    }
+                });
+            });
+
+            // 更新和绘制辅助企鹅
+            helpers.forEach((helper, hIndex) => {
+                if (penguinImg.complete) {
+                    ctx.drawImage(penguinImg, helper.x, helper.y, 30, 30);
+                    // 注释：后续根据helper.type替换，如 'shootPenguin.png', 'healPenguin.png'
+                } else {
+                    ctx.fillStyle = helper.type === 'shoot' ? 'green' : 'cyan';
+                    ctx.fillRect(helper.x, helper.y, 30, 30);
+                }
+
+                helper.shootTimer++;
+                if (helper.type === 'shoot' && helper.shootTimer >= 60) {
+                    helper.shootTimer = 0;
+                    const target = findNearestEnemy(helper);
+                    if (target) {
+                        helperBullets.push({ x: helper.x, y: helper.y, targetX: target.x, targetY: target.y, speed: 4 });
+                        // shootSound.play(); // 后续替换射击音效URL
+                    }
+                } else if (helper.type === 'heal' && helper.shootTimer >= 300) {
+                    helper.shootTimer = 0;
+                    game.playerHealth = Math.min(game.maxHealth, game.playerHealth + 10);
+                }
+            });
+
+            // 更新和绘制辅助企鹅子弹
+            helperBullets.forEach((bullet, bIndex) => {
+                const dx = bullet.targetX - bullet.x;
+                const dy = bullet.targetY - bullet.y;
+                const angle = Math.atan2(dy, dx);
+                bullet.x += Math.cos(angle) * bullet.speed;
+                bullet.y += Math.sin(angle) * bullet.speed;
+
+                ctx.fillStyle = 'yellow';
+                ctx.fillRect(bullet.x, bullet.y, 5, 5);
+
+                enemies.forEach((enemy, eIndex) => {
+                    if (!enemy.isStealth && bullet.x > enemy.x && bullet.x < enemy.x + enemy.width &&
+                        bullet.y > enemy.y && bullet.y < enemy.y + enemy.height) {
+                        const damage = enemy.type === 7 ? 5 * 0.5 : 5;
+                        enemy.health -= damage;
+                        helperBullets.splice(bIndex, 1);
+                        // hitSound.play(); // 后续替换击中音效URL
+                        if (enemy.health <= 0) {
+                            if (enemy.type === 6) {
+                                enemies.forEach(other => {
+                                    if (other !== enemy && Math.hypot(other.x - enemy.x, other.y - enemy.y) < 50) {
+                                        other.health -= 40;
+                                    }
+                                });
+                            }
+                            enemies.splice(eIndex, 1);
+                            game.coins += 5;
+                            // deathSound.play(); // 后续替换死亡音效URL
+                        }
+                    }
+                });
+            });
+
+            // 更新和绘制远程企鹅子弹
+            enemyBullets.forEach((bullet, bIndex) => {
+                const dx = bullet.targetX - bullet.x;
+                const dy = bullet.targetY - bullet.y;
+                const angle = Math.atan2(dy, dx);
+                bullet.x += Math.cos(angle) * bullet.speed;
+                bullet.y += Math.sin(angle) * bullet.speed;
+
+                ctx.fillStyle = 'purple';
+                ctx.fillRect(bullet.x, bullet.y, 5, 5);
+
+                if (bullet.x > player.x && bullet.x < player.x + player.width &&
+                    bullet.y > player.y && bullet.y < player.y + player.height) {
+                    game.playerHealth -= game.shield ? 2.4 : 3;
+                    enemyBullets.splice(bIndex, 1);
+                    // hitSound.play(); // 后续替换击中音效URL
+                }
+            });
+
+            // 绘制关卡提示
+            if (game.levelMessageTimer > 0) {
+                ctx.fillStyle = 'black';
+                ctx.font = '30px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText(`第 ${game.level} 关开始`, canvas.width / 2, canvas.height / 2);
+                game.levelMessageTimer--;
+            }
+
+            // 更新界面
+            document.getElementById('coinCount').textContent = game.coins;
+            document.getElementById('healthCount').textContent = `${game.playerHealth}/${game.maxHealth}`;
+            document.getElementById('magazineCount').textContent = game.magazine;
+
+            // 检查关卡结束
+            if (enemies.length === 0 && game.enemiesLeft === 0 && game.level <= game.maxLevels) {
+                game.coins += (game.level * 5);
+                game.level++;
+                if (game.level > game.maxLevels) {
+                    alert('恭喜通关！总得分: ' + game.coins);
+                    resetGame();
+                } else {
+                    designLevel(game.level);
+                }
+            }
+
+            // 游戏失败
+            if (game.playerHealth <= 0) {
+                // gameOverSound.play(); // 后续替换游戏结束音效URL
+                alert('游戏结束！得分: ' + game.coins);
+                resetGame();
+            }
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        // 找到最近的敌人
+        function findNearestEnemy(helper) {
+            let nearest = null;
+            let minDist = Infinity;
+            enemies.forEach(enemy => {
+                if (!enemy.isStealth) {
+                    const dist = Math.hypot(enemy.x - helper.x, enemy.y - helper.y);
+                    if (dist < minDist) {
+                        minDist = dist;
+                        nearest = enemy;
+                    }
+                }
+            });
+            return nearest;
+        }
+
+        // 商店功能
+        function buyGun(type) {
+            if (type === 'rifle' && game.coins >= 200 && game.gunType === 'pistol') {
+                game.coins -= 200;
+                game.gunType = 'rifle';
+                game.gunDamage = 20;
+                // purchaseSound.play(); // 后续替换购买音效URL
+            } else if (type === 'shotgun' && game.coins >= 500 && game.gunType !== 'shotgun') {
+                game.coins -= 500;
+                game.gunType = 'shotgun';
+                game.gunDamage = 15;
+                // purchaseSound.play(); // 后续替换购买音效URL
+            }
+        }
+
+        function upgradeMagazine() {
+            const costs = [50, 100, 200, 300, 500];
+            if (game.magazineLevel < 5 && game.coins >= costs[game.magazineLevel]) {
+                game.coins -= costs[game.magazineLevel];
+                game.maxMagazine += 5;
+                game.magazine = game.maxMagazine;
+                game.magazineLevel++;
+                // purchaseSound.play(); // 后续替换购买音效URL
+            }
+        }
+
+        function upgradeDamage() {
+            const costs = [50, 100, 200, 300, 500];
+            if (game.damageLevel < 5 && game.coins >= costs[game.damageLevel]) {
+                game.coins -= costs[game.damageLevel];
+                game.gunDamage += 5;
+                game.damageLevel++;
+                // purchaseSound.play(); // 后续替换购买音效URL
+            }
+        }
+
+        function buyHelper(type) {
+            if (type === 'shoot' && game.coins >= 100) {
+                game.coins -= 100;
+                helpers.push({ x: 650, y: Math.random() * 200, shootTimer: 0, type: 'shoot' });
+                // purchaseSound.play(); // 后续替换购买音效URL
+            } else if (type === 'heal' && game.coins >= 300) {
+                game.coins -= 300;
+                helpers.push({ x: 650, y: Math.random() * 200, shootTimer: 0, type: 'heal' });
+                // purchaseSound.play(); // 后续替换购买音效URL
+            }
+        }
+
+        function upgradeHealth() {
+            const costs = [100, 200, 400];
+            if (game.maxHealth < 200 && game.coins >= costs[(game.maxHealth - 100) / 20]) {
+                game.coins -= costs[(game.maxHealth - 100) / 20];
+                game.maxHealth += 20;
+                game.playerHealth += 20;
+                // purchaseSound.play(); // 后续替换购买音效URL
+            }
+        }
+
+        function upgradeFireRate() {
+            const costs = [150, 300, 600];
+            if (game.fireRateLevel < 3 && game.coins >= costs[game.fireRateLevel]) {
+                game.coins -= costs[game.fireRateLevel];
+                game.fireRate -= 10;
+                game.fireRateLevel++;
+                // purchaseSound.play(); // 后续替换购买音效URL
+            }
+        }
+
+        function buyShield() {
+            if (game.coins >= 1000 && !game.shield) {
+                game.coins -= 1000;
+                game.shield = true;
+                game.shieldTimer = 600;
+                // purchaseSound.play(); // 后续替换购买音效URL
+            }
+        }
+
+        function resetGame() {
+            game.coins = 0;
+            game.playerHealth = 100;
+            game.maxHealth = 100;
+            game.level = 1;
+            game.gunType = 'pistol';
+            game.gunDamage = 10;
+            game.magazine = 10;
+            game.maxMagazine = 10;
+            game.magazineLevel = 0;
+            game.damageLevel = 0;
+            game.fireRate = 30;
+            game.fireRateLevel = 0;
+            game.shield = false;
+            game.shieldTimer = 0;
+            game.enemiesLeft = 0;
+            game.totalEnemies = 0;
+            enemies = [];
+            bullets = [];
+            helperBullets = [];
+            enemyBullets = [];
+            helpers = [];
+            designLevel(1);
+        }
+
+        // 图片加载后启动游戏
+        penguinImg.onload = () => {
+            designLevel(1);
+            gameLoop();
+        };
+    </script>
+</body>
+</html>
+细节优化说明
+霰弹枪散射：
+实现3颗子弹，水平偏移±10像素，增加覆盖范围。
+每颗子弹伤害15，消耗1发弹匣。
+界面显示：
+新增“子弹”计数（magazineCount），实时显示剩余弹匣。
+商店逻辑：
+枪支升级覆盖式（步枪不可再升霰弹枪），其他为递增式。
+辅助企鹅区分 type，射击和回血逻辑分开。
+运行保障：
+保持现有图片（p1095208351.webp）和纯色背景。
+音效注释保留，无实际加载。
+测试与运行
+功能验证：
+初始手枪10发，伤害10，可升级至步枪（20伤害）或霰弹枪（15伤害，3发散射）。
+弹匣10-30，威力10-30，血量100-200，射速2-5发/秒。
+辅助企鹅生效，回血每5秒10，射击每秒5伤害。
+护盾10秒减免20%伤害。
+金币平衡：
+收入约3050，成本约6150，需选择性升级（如优先血量+射速+1只企鹅）。
+下一步建议
+商店界面：
+每关结束后弹出模态窗口，显示当前状态和升级选项。
+细节调整：
+弹匣冷却动画（canvas绘制进度条）。
+辅助企鹅上限（5只）。
+护盾冷却时间（30秒后可再买）。
+资源替换：
+提供不同图片（如玩家、敌人、辅助企鹅）。
+添加音效URL。
+请确认游戏运行是否正常，或提出具体调整需求（如成本调整、新升级项），我再进一步完善！
+Ask anything
+
+以下是直接用复制按钮复制html代码
+
+<!DOCTYPE html>
+<html>
+<head>
+    <title>企鹅堡垒防御</title>
+    <style>
+        canvas {
+            border: 1px solid black;
+            background: #e6f3ff;
+        }
+        #gameContainer {
+            text-align: center;
+            font-family: Arial, sans-serif;
+        }
+        #shop {
+            margin: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <canvas id="gameCanvas" width="800" height="400"></canvas>
+        <div id="shop">
+            <button onclick="buyGun('rifle')">步枪 (200金币)</button>
+            <button onclick="buyGun('shotgun')">霰弹枪 (500金币)</button>
+            <button onclick="upgradeMagazine()">升级弹匣 (+5发, 50起)</button>
+            <button onclick="upgradeDamage()">升级威力 (+5, 50起)</button>
+            <button onclick="buyHelper('heal')">回血企鹅 (300金币)</button>
+            <button onclick="buyHelper('shoot')">射击企鹅 (100金币)</button>
+            <button onclick="upgradeHealth()">提升血量 (+20, 100起)</button>
+            <button onclick="upgradeFireRate()">提升射速 (+1发/秒, 150起)</button>
+            <button onclick="buyShield()">护盾 (1000金币)</button>
+            <div>金币: <span id="coinCount">0</span> | 血量: <span id="healthCount">100</span> | 关卡: <span id="levelCount">1</span> | 子弹: <span id="magazineCount">10</span></div>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // 加载企鹅图片
+        const penguinImg = new Image();
+        penguinImg.src = 'https://pic5.doubanio.com/view/photo/l/public/p1095208351.webp';
+
+        // 游戏状态
+        let game = {
+            coins: 0,
+            playerHealth: 100,
+            maxHealth: 100,
+            level: 1,
+            gunType: 'pistol',
+            gunDamage: 10,
+            magazine: 10,
+            maxMagazine: 10,
+            magazineLevel: 0,
+            damageLevel: 0,
+            fireRate: 30,
+            fireRateLevel: 0,
+            shield: false,
+            shieldTimer: 0,
+            enemiesLeft: 0,
+            totalEnemies: 0,
+            maxLevels: 20,
+            levelMessageTimer: 0,
+            shootTimer: 0
+        };
+
+        // 玩家企鹅
+        const player = {
+            x: 700,
+            y: 100,
+            width: 40,
+            height: 40
+        };
+
+        // 数组
+        let enemies = [];
+        let bullets = [];
+        let helperBullets = [];
+        let enemyBullets = [];
+        let helpers = [];
+        let spawnInterval;
+
+        // 关卡设计
+        function designLevel(level) {
+            game.totalEnemies = level * 3 + 5;
+            game.enemiesLeft = game.totalEnemies;
+            const baseHealth = 50 + level * 5;
+            const baseSpeed = 1 + level * 0.1;
+            const interval = Math.max(200, 1000 - level * 40);
+
+            clearInterval(spawnInterval);
+            spawnInterval = setInterval(() => {
+                if (game.enemiesLeft > 0 && enemies.length < 15) {
+                    spawnEnemy(level, baseHealth, baseSpeed);
+                    game.enemiesLeft--;
+                }
+            }, interval);
+
+            game.levelMessageTimer = 120;
+        }
+
+        // 敌人生成
+        function spawnEnemy(level, baseHealth, baseSpeed) {
+            let type;
+            const roll = Math.random();
+            if (level <= 2) type = roll < 0.7 ? 0 : 1;
+            else if (level <= 4) type = roll < 0.5 ? 0 : roll < 0.8 ? 1 : 2;
+            else if (level <= 6) type = roll < 0.4 ? 0 : roll < 0.6 ? 1 : roll < 0.8 ? 2 : 3;
+            else if (level <= 8) type = roll < 0.3 ? 0 : roll < 0.5 ? 1 : roll < 0.7 ? 2 : roll < 0.9 ? 3 : 4;
+            else if (level <= 10) type = roll < 0.25 ? 0 : roll < 0.45 ? 1 : roll < 0.65 ? 2 : roll < 0.8 ? 3 : 5;
+            else if (level <= 12) type = roll < 0.2 ? 0 : roll < 0.4 ? 1 : roll < 0.6 ? 2 : roll < 0.8 ? 4 : 6;
+            else if (level <= 14) type = roll < 0.15 ? 0 : roll < 0.35 ? 3 : roll < 0.55 ? 4 : roll < 0.75 ? 5 : 7;
+            else if (level <= 16) type = roll < 0.2 ? 1 : roll < 0.4 ? 2 : roll < 0.6 ? 3 : roll < 0.8 ? 6 : 7;
+            else type = Math.floor(Math.random() * 8);
+
+            const enemy = {
+                x: 0,
+                y: Math.random() * (canvas.height - 50),
+                width: 30,
+                height: 30,
+                health: baseHealth * (type === 2 ? 2 : type === 4 ? 0.5 : type === 6 ? 0.8 : type === 7 ? 3 : 1),
+                speed: baseSpeed * (type === 1 ? 1.5 : type === 2 ? 0.5 : type === 7 ? 0.7 : 1),
+                type: type,
+                shootTimer: 0,
+                healTimer: 0,
+                stealthTimer: 0,
+                isStealth: false
+            };
+            enemies.push(enemy);
+        }
+
+        // 玩家射击
+        canvas.addEventListener('click', (e) => {
+            if (game.shootTimer <= 0 && game.magazine > 0) {
+                const rect = canvas.getBoundingClientRect();
+                if (game.gunType === 'shotgun') {
+                    for (let i = 0; i < 3; i++) {
+                        bullets.push({
+                            x: player.x,
+                            y: player.y,
+                            targetX: e.clientX - rect.left + (i - 1) * 10,
+                            targetY: e.clientY - rect.top,
+                            speed: 5
+                        });
+                    }
+                } else {
+                    bullets.push({
+                        x: player.x,
+                        y: player.y,
+                        targetX: e.clientX - rect.left,
+                        targetY: e.clientY - rect.top,
+                        speed: 5
+                    });
+                }
+                game.magazine--;
+                game.shootTimer = game.fireRate;
+                // shootSound.play(); // 后续替换射击音效URL
+            }
+        });
+
+        // 游戏循环
+        function gameLoop() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // 绘制雪山堡垒
+            ctx.fillStyle = 'white';
+            ctx.fillRect(600, 0, 200, canvas.height);
+
+            // 绘制玩家企鹅
+            if (penguinImg.complete) {
+                ctx.drawImage(penguinImg, player.x, player.y, player.width, player.height);
+                // 注释：后续替换为 'playerPenguin.png'
+            } else {
+                ctx.fillStyle = 'black';
+                ctx.fillRect(player.x, player.y, player.width, player.height);
+            }
+
+            // 更新射击和弹匣
+            if (game.shootTimer > 0) game.shootTimer--;
+            if (game.magazine === 0 && game.shootTimer <= 0) {
+                game.magazine = game.maxMagazine;
+                game.shootTimer = 60; // 装弹1秒
+            }
+
+            // 更新护盾
+            if (game.shield && game.shieldTimer > 0) {
+                game.shieldTimer--;
+                if (game.shieldTimer <= 0) game.shield = false;
+            }
+
+            // 更新和绘制敌人
+            enemies.forEach((enemy, index) => {
+                if (enemy.type === 3 && enemy.x >= 400) {
+                    enemy.speed = 0;
+                    enemy.shootTimer++;
+                    if (enemy.shootTimer >= 45) {
+                        enemy.shootTimer = 0;
+                        enemyBullets.push({ x: enemy.x, y: enemy.y, targetX: player.x, targetY: player.y, speed: 3 });
+                        // shootSound.play(); // 后续替换射击音效URL
+                    }
+                } else if (enemy.type === 4) {
+                    enemy.healTimer++;
+                    if (enemy.healTimer >= 120) {
+                        enemy.healTimer = 0;
+                        const healAmount = 10 + game.level * 2;
+                        enemies.forEach(other => {
+                            if (other !== enemy && Math.hypot(other.x - enemy.x, other.y - enemy.y) < 100) {
+                                other.health += healAmount;
+                            }
+                        });
+                    }
+                    enemy.x += enemy.speed;
+                } else if (enemy.type === 5) {
+                    enemy.stealthTimer++;
+                    if (enemy.stealthTimer >= 120) {
+                        enemy.stealthTimer = 0;
+                        enemy.isStealth = !enemy.isStealth;
+                    }
+                    enemy.x += enemy.speed;
+                } else {
+                    enemy.x += enemy.speed;
+                }
+
+                if (enemy.x >= 600) {
+                    game.playerHealth -= game.shield ? 4 : 5;
+                    enemies.splice(index, 1);
+                }
+
+                if (!enemy.isStealth) {
+                    if (penguinImg.complete) {
+                        ctx.drawImage(penguinImg, enemy.x, enemy.y, enemy.width, enemy.height);
+                        // 注释：后续根据enemy.type替换，如 'normalPenguin.png', 'fastPenguin.png' 等
+                    } else {
+                        ctx.fillStyle = enemy.type === 0 ? 'gray' : enemy.type === 1 ? 'blue' : enemy.type === 2 ? 'red' :
+                                        enemy.type === 3 ? 'yellow' : enemy.type === 4 ? 'green' : enemy.type === 5 ? 'rgba(128,128,128,0.5)' :
+                                        enemy.type === 6 ? 'orange' : 'darkgray';
+                        ctx.fillRect(enemy.x, enemy.y, enemy.width, enemy.height);
+                    }
+                }
+            });
+
+            // 更新和绘制玩家子弹
+            bullets.forEach((bullet, bIndex) => {
+                const dx = bullet.targetX - bullet.x;
+                const dy = bullet.targetY - bullet.y;
+                const angle = Math.atan2(dy, dx);
+                bullet.x += Math.cos(angle) * bullet.speed;
+                bullet.y += Math.sin(angle) * bullet.speed;
+
+                ctx.fillStyle = 'red';
+                ctx.fillRect(bullet.x, bullet.y, 5, 5);
+
+                enemies.forEach((enemy, eIndex) => {
+                    if (!enemy.isStealth && bullet.x > enemy.x && bullet.x < enemy.x + enemy.width &&
+                        bullet.y > enemy.y && bullet.y < enemy.y + enemy.height) {
+                        const damage = enemy.type === 7 ? game.gunDamage * 0.5 : game.gunDamage;
+                        enemy.health -= damage;
+                        bullets.splice(bIndex, 1);
+                        // hitSound.play(); // 后续替换击中音效URL
+                        if (enemy.health <= 0) {
+                            if (enemy.type === 6) {
+                                enemies.forEach(other => {
+                                    if (other !== enemy && Math.hypot(other.x - enemy.x, other.y - enemy.y) < 50) {
+                                        other.health -= 40;
+                                    }
+                                });
+                            }
+                            enemies.splice(eIndex, 1);
+                            game.coins += 10;
+                            // deathSound.play(); // 后续替换死亡音效URL
+                        }
+                    }
+                });
+            });
+
+            // 更新和绘制辅助企鹅
+            helpers.forEach((helper, hIndex) => {
+                if (penguinImg.complete) {
+                    ctx.drawImage(penguinImg, helper.x, helper.y, 30, 30);
+                    // 注释：后续根据helper.type替换，如 'shootPenguin.png', 'healPenguin.png'
+                } else {
+                    ctx.fillStyle = helper.type === 'shoot' ? 'green' : 'cyan';
+                    ctx.fillRect(helper.x, helper.y, 30, 30);
+                }
+
+                helper.shootTimer++;
+                if (helper.type === 'shoot' && helper.shootTimer >= 60) {
+                    helper.shootTimer = 0;
+                    const target = findNearestEnemy(helper);
+                    if (target) {
+                        helperBullets.push({ x: helper.x, y: helper.y, targetX: target.x, targetY: target.y, speed: 4 });
+                        // shootSound.play(); // 后续替换射击音效URL
+                    }
+                } else if (helper.type === 'heal' && helper.shootTimer >= 300) {
+                    helper.shootTimer = 0;
+                    game.playerHealth = Math.min(game.maxHealth, game.playerHealth + 10);
+                }
+            });
+
+            // 更新和绘制辅助企鹅子弹
+            helperBullets.forEach((bullet, bIndex) => {
+                const dx = bullet.targetX - bullet.x;
+                const dy = bullet.targetY - bullet.y;
+                const angle = Math.atan2(dy, dx);
+                bullet.x += Math.cos(angle) * bullet.speed;
+                bullet.y += Math.sin(angle) * bullet.speed;
+
+                ctx.fillStyle = 'yellow';
+                ctx.fillRect(bullet.x, bullet.y, 5, 5);
+
+                enemies.forEach((enemy, eIndex) => {
+                    if (!enemy.isStealth && bullet.x > enemy.x && bullet.x < enemy.x + enemy.width &&
+                        bullet.y > enemy.y && bullet.y < enemy.y + enemy.height) {
+                        const damage = enemy.type === 7 ? 5 * 0.5 : 5;
+                        enemy.health -= damage;
+                        helperBullets.splice(bIndex, 1);
+                        // hitSound.play(); // 后续替换击中音效URL
+                        if (enemy.health <= 0) {
+                            if (enemy.type === 6) {
+                                enemies.forEach(other => {
+                                    if (other !== enemy && Math.hypot(other.x - enemy.x, other.y - enemy.y) < 50) {
+                                        other.health -= 40;
+                                    }
+                                });
+                            }
+                            enemies.splice(eIndex, 1);
+                            game.coins += 5;
+                            // deathSound.play(); // 后续替换死亡音效URL
+                        }
+                    }
+                });
+            });
+
+            // 更新和绘制远程企鹅子弹
+            enemyBullets.forEach((bullet, bIndex) => {
+                const dx = bullet.targetX - bullet.x;
+                const dy = bullet.targetY - bullet.y;
+                const angle = Math.atan2(dy, dx);
+                bullet.x += Math.cos(angle) * bullet.speed;
+                bullet.y += Math.sin(angle) * bullet.speed;
+
+                ctx.fillStyle = 'purple';
+                ctx.fillRect(bullet.x, bullet.y, 5, 5);
+
+                if (bullet.x > player.x && bullet.x < player.x + player.width &&
+                    bullet.y > player.y && bullet.y < player.y + player.height) {
+                    game.playerHealth -= game.shield ? 2.4 : 3;
+                    enemyBullets.splice(bIndex, 1);
+                    // hitSound.play(); // 后续替换击中音效URL
+                }
+            });
+
+            // 绘制关卡提示
+            if (game.levelMessageTimer > 0) {
+                ctx.fillStyle = 'black';
+                ctx.font = '30px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText(`第 ${game.level} 关开始`, canvas.width / 2, canvas.height / 2);
+                game.levelMessageTimer--;
+            }
+
+            // 更新界面
+            document.getElementById('coinCount').textContent = game.coins;
+            document.getElementById('healthCount').textContent = `${game.playerHealth}/${game.maxHealth}`;
+            document.getElementById('magazineCount').textContent = game.magazine;
+
+            // 检查关卡结束
+            if (enemies.length === 0 && game.enemiesLeft === 0 && game.level <= game.maxLevels) {
+                game.coins += (game.level * 5);
+                game.level++;
+                if (game.level > game.maxLevels) {
+                    alert('恭喜通关！总得分: ' + game.coins);
+                    resetGame();
+                } else {
+                    designLevel(game.level);
+                }
+            }
+
+            // 游戏失败
+            if (game.playerHealth <= 0) {
+                // gameOverSound.play(); // 后续替换游戏结束音效URL
+                alert('游戏结束！得分: ' + game.coins);
+                resetGame();
+            }
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        // 找到最近的敌人
+        function findNearestEnemy(helper) {
+            let nearest = null;
+            let minDist = Infinity;
+            enemies.forEach(enemy => {
+                if (!enemy.isStealth) {
+                    const dist = Math.hypot(enemy.x - helper.x, enemy.y - helper.y);
+                    if (dist < minDist) {
+                        minDist = dist;
+                        nearest = enemy;
+                    }
+                }
+            });
+            return nearest;
+        }
+
+        // 商店功能
+        function buyGun(type) {
+            if (type === 'rifle' && game.coins >= 200 && game.gunType === 'pistol') {
+                game.coins -= 200;
+                game.gunType = 'rifle';
+                game.gunDamage = 20;
+                // purchaseSound.play(); // 后续替换购买音效URL
+            } else if (type === 'shotgun' && game.coins >= 500 && game.gunType !== 'shotgun') {
+                game.coins -= 500;
+                game.gunType = 'shotgun';
+                game.gunDamage = 15;
+                // purchaseSound.play(); // 后续替换购买音效URL
+            }
+        }
+
+        function upgradeMagazine() {
+            const costs = [50, 100, 200, 300, 500];
+            if (game.magazineLevel < 5 && game.coins >= costs[game.magazineLevel]) {
+                game.coins -= costs[game.magazineLevel];
+                game.maxMagazine += 5;
+                game.magazine = game.maxMagazine;
+                game.magazineLevel++;
+                // purchaseSound.play(); // 后续替换购买音效URL
+            }
+        }
+
+        function upgradeDamage() {
+            const costs = [50, 100, 200, 300, 500];
+            if (game.damageLevel < 5 && game.coins >= costs[game.damageLevel]) {
+                game.coins -= costs[game.damageLevel];
+                game.gunDamage += 5;
+                game.damageLevel++;
+                // purchaseSound.play(); // 后续替换购买音效URL
+            }
+        }
+
+        function buyHelper(type) {
+            if (type === 'shoot' && game.coins >= 100) {
+                game.coins -= 100;
+                helpers.push({ x: 650, y: Math.random() * 200, shootTimer: 0, type: 'shoot' });
+                // purchaseSound.play(); // 后续替换购买音效URL
+            } else if (type === 'heal' && game.coins >= 300) {
+                game.coins -= 300;
+                helpers.push({ x: 650, y: Math.random() * 200, shootTimer: 0, type: 'heal' });
+                // purchaseSound.play(); // 后续替换购买音效URL
+            }
+        }
+
+        function upgradeHealth() {
+            const costs = [100, 200, 400];
+            if (game.maxHealth < 200 && game.coins >= costs[(game.maxHealth - 100) / 20]) {
+                game.coins -= costs[(game.maxHealth - 100) / 20];
+                game.maxHealth += 20;
+                game.playerHealth += 20;
+                // purchaseSound.play(); // 后续替换购买音效URL
+            }
+        }
+
+        function upgradeFireRate() {
+            const costs = [150, 300, 600];
+            if (game.fireRateLevel < 3 && game.coins >= costs[game.fireRateLevel]) {
+                game.coins -= costs[game.fireRateLevel];
+                game.fireRate -= 10;
+                game.fireRateLevel++;
+                // purchaseSound.play(); // 后续替换购买音效URL
+            }
+        }
+
+        function buyShield() {
+            if (game.coins >= 1000 && !game.shield) {
+                game.coins -= 1000;
+                game.shield = true;
+                game.shieldTimer = 600;
+                // purchaseSound.play(); // 后续替换购买音效URL
+            }
+        }
+
+        function resetGame() {
+            game.coins = 0;
+            game.playerHealth = 100;
+            game.maxHealth = 100;
+            game.level = 1;
+            game.gunType = 'pistol';
+            game.gunDamage = 10;
+            game.magazine = 10;
+            game.maxMagazine = 10;
+            game.magazineLevel = 0;
+            game.damageLevel = 0;
+            game.fireRate = 30;
+            game.fireRateLevel = 0;
+            game.shield = false;
+            game.shieldTimer = 0;
+            game.enemiesLeft = 0;
+            game.totalEnemies = 0;
+            enemies = [];
+            bullets = [];
+            helperBullets = [];
+            enemyBullets = [];
+            helpers = [];
+            designLevel(1);
+        }
+
+        // 图片加载后启动游戏
+        penguinImg.onload = () => {
+            designLevel(1);
+            gameLoop();
+        };
+    </script>
+</body>
+</html>
+
+代码结束，下面是新的对话
